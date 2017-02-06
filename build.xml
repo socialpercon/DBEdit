@@ -1,0 +1,121 @@
+<project name="dbedit" default="jar" basedir=".">
+    <property name="src" location="src"/>
+    <property name="resources" location="resources"/>
+    <property name="lib" location="lib"/>
+    <property name="build" location="classes"/>
+    <property name="dist" location="dist"/>
+
+    <path id="dist.classpath">
+        <pathelement path="${build}"/>
+        <fileset dir="${lib}">
+            <include name="**/*.jar"/>
+        </fileset>
+    </path>
+
+    <target name="get-version">
+        <loadfile property="version" srcfile="src/changes.txt">
+            <filterchain>
+                <replaceregex flags="s" byline="false" pattern="(.*?)\s.*" replace="\1"/>
+            </filterchain>
+        </loadfile>
+        <condition property="longversion" value="${version}.0.0" else="${version}.0">
+            <matches pattern="2\.\d+$" string="${version}"/>
+        </condition>
+    </target>
+
+    <target name="stylecheck">
+        <taskdef resource="checkstyletask.properties" classpath="${resources}/checkstyle-5.3-all.jar"/>
+        <checkstyle config="${resources}/sun_checks.xml">
+            <fileset dir="${src}/dbedit" includes="**/*.java"/>
+        </checkstyle>
+    </target>
+
+    <target name="compile" depends="stylecheck">
+        <mkdir dir="${build}"/>
+        <javac srcdir="${src}" destdir="${build}" classpathref="dist.classpath" debug="on"/>
+        <copy todir="${build}">
+            <fileset dir="${src}" includes="**/*.properties **/*.txt **/*.png **/*.gif"/>
+        </copy>
+    </target>
+
+    <target name="jar" depends="compile">
+        <mkdir dir="${dist}"/>
+        <jar jarfile="${dist}/dbedit.jar">
+            <fileset dir="${build}" includes="**/*"/>
+            <manifest>
+                <attribute name="Main-Class" value="dbedit.DBEdit"/>
+                <attribute name="Class-Path" value="poi-3.6-20091214.jar iText-5.0.1.jar jsyntaxpane-0.9.5-b29.jar"/>
+            </manifest>
+        </jar>
+    </target>
+
+    <target name="make-win" depends="jar, get-version">
+        <taskdef name="launch4j" classname="net.sf.launch4j.ant.Launch4jTask"
+                 classpath="${resources}/launch4j/launch4j.jar"/>
+        <launch4j>
+            <config jar="${dist}/dbedit.jar" outfile="${dist}/DBEdit.exe" icon="${resources}/launcher.ico"
+                    customProcName="true" errTitle="DBEdit 2">
+                <jre minVersion="1.6.0" maxHeapSize="512"/>
+                <versioninfo fileDescription="DBEdit 2"
+                             fileVersion="${longversion}"
+                             txtFileVersion="${version}"
+                             copyright="Copyright (c) 2006-2012 Jef Van Den Ouweland"
+                             companyName="Jef Van Den Ouweland"
+                             productName="DBEdit 2"
+                             productVersion="${longversion}"
+                             txtProductVersion="${version}"
+                             internalname="dbedit"
+                             originalfilename="DBEdit.exe"/>
+            </config>
+        </launch4j>
+
+        <condition property="executable" value="${resources}/nsis-2.46/makensis.exe" else="wine">
+            <os family="windows" />
+        </condition>
+
+        <condition property="arg1" value="" else="${resources}/nsis-2.46/makensis.exe">
+            <os family="windows" />
+        </condition>
+
+        <exec executable="${executable}" failonerror="true">
+            <arg line="${arg1}"/>
+            <arg line="${resources}/installer.nsi"/>
+            <env key="version" value="${version}"/>
+            <env key="longversion" value="${longversion}"/>
+        </exec>
+        <delete file="${dist}/DBEdit.exe"/>
+    </target>
+
+    <target name="make-unix" depends="jar, get-version">
+        <fixcrlf file="${src}/license.txt" eol="unix" destdir="${dist}"/>
+        <tar compression="gzip" tarfile="${dist}/DBEdit${version}.tar.gz">
+            <tarfileset prefix="DBEdit/" dir="${resources}" includes="dbedit" filemode="755"/>
+            <tarfileset prefix="DBEdit/" dir="${resources}" includes="dbedit.png"/>
+            <tarfileset prefix="DBEdit/" dir="${dist}" includes="dbedit.jar license.txt"/>
+            <tarfileset prefix="DBEdit/" dir="${lib}" includes="*.jar"/>
+        </tar>
+        <delete file="${dist}/license.txt"/>
+    </target>
+
+    <target name="make-src" depends="get-version">
+        <mkdir dir="${dist}"/>
+        <zip file="${dist}/DBEdit${version}_src.zip">
+            <fileset dir="." includes="src/**/* resources/**/* lib/* build.xml"/>
+        </zip>
+    </target>
+
+    <target name="make-backup" depends="get-version">
+        <delete file="DBEdit${version}.zip"/>
+        <zip file="DBEdit${version}.zip">
+            <fileset dir="." excludes="classes dist classes/**/* dist/**/* *.iws"/>
+        </zip>
+    </target>
+
+    <target name="make-all" depends="clean, make-src, make-unix, make-win"/>
+
+    <target name="clean">
+        <delete dir="${dist}"/>
+        <delete dir="${build}"/>
+    </target>
+
+</project>
